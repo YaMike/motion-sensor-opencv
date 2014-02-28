@@ -50,7 +50,7 @@ static void signal_handler(int sig) {
   switch (sig) {
     case SIGINT:
       run = 0;
-      printf("Stop processing.\n");
+      printf("\nStop processing.\n");
       break;
     case SIGUSR1:
       printf("Statistics:\n"\
@@ -158,17 +158,9 @@ static void  update_mhi( IplImage* img, IplImage* dst, int diff_threshold )
     /*
      * selection of component ROI (Region Of Interest) && counting number of points && reset ROI
      */
-    cvSetImageROI( silh,   comp_rect );
-    cvSetImageROI( mhi,    comp_rect );
-    cvSetImageROI( orient, comp_rect );
-    cvSetImageROI( mask,   comp_rect );
-
+		cvSetImageROI( silh,   comp_rect );
     double count = cvNorm( silh, 0, CV_L1, 0 ); // calculate number of points within silhouette ROI
-
-    cvResetImageROI( mhi    );
-    cvResetImageROI( orient );
-    cvResetImageROI( mask   );
-    cvResetImageROI( silh   );
+		cvResetImageROI( silh );
 
     if ( count < comp_rect.width*comp_rect.height * LITTLE_MOTION_POINTS_PERCENT / 100 ) continue; // check for the case of little motion (too few points has moved)
 
@@ -177,10 +169,16 @@ static void  update_mhi( IplImage* img, IplImage* dst, int diff_threshold )
      */
     if ( comp_rect.width != resolution_x && comp_rect.height != resolution_y )
     {
+			/* 
+			 * Red square displaying detected features.
+			 */
       cvRectangle(dst,
                   cvPoint(comp_rect.x + comp_rect.width/2+5,comp_rect.y + comp_rect.height/2+5),
                   cvPoint(comp_rect.x + comp_rect.width/2-5,comp_rect.y + comp_rect.height/2-5),
                   CV_RGB(255,0,0), 2, CV_AA, 0 );
+
+			int active_regions[REGIONS_CNT];
+			memset(active_regions, -1, sizeof(int)*REGIONS_CNT);
 
       for (int i_mass = 0; i_mass < REGIONS_CNT; i_mass++)
       {
@@ -189,12 +187,17 @@ static void  update_mhi( IplImage* img, IplImage* dst, int diff_threshold )
             && comp_rect.y + comp_rect.height/2 <= region_coordinates[i_mass][3]
             && comp_rect.y + comp_rect.height/2 >= region_coordinates[i_mass][1] )
         {
+					/*
+					 * Blue squares displaying regions.
+					 */
           cvRectangle(dst, 
                       cvPoint(region_coordinates[i_mass][0], region_coordinates[i_mass][1]),
                       cvPoint(region_coordinates[i_mass][2], region_coordinates[i_mass][3]),
                       CV_RGB(0,0,255), 2, CV_AA, 0 );
-
-          printf("Detect motion in region %d\n",i_mass);
+					/*
+					 * Remember active detection regions for user.
+					 */
+					active_regions[i_mass] = i_mass;
 
 #if FTDI_OUTPUT == 1
           char command[strlen("region\n") + (int)log10(REGIONS_CNT) + 1];
@@ -203,6 +206,15 @@ static void  update_mhi( IplImage* img, IplImage* dst, int diff_threshold )
 #endif
         }
       }
+
+			for ( uint32_t k = 0; k < REGIONS_CNT; k++ ) {
+				if ( active_regions[k] != -1 ) {
+					printf( "%2d", active_regions[k] );
+				} else {
+					printf( "  " );
+				}
+			}
+			printf("\r");
     }
   }
 }
@@ -421,7 +433,7 @@ int main(int argc, char** argv)
       }
     }
 
-    printf("Starting motion detection.\n");
+    printf("Starting motion detection.\nDetected motion in regions:\n");
     for(run = 1;run;)
     {
       /*
